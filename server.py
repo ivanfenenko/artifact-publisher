@@ -24,6 +24,7 @@ import mimetypes
 import os
 import re
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import zipfile
@@ -1114,6 +1115,20 @@ class Handler(BaseHTTPRequestHandler):
         self.send_body(200, data, ctype)
 
 
+def register_mdns(port: int):
+    """Advertise the server via Bonjour so other machines can discover it.
+
+    Returns the dns-sd subprocess, or None if dns-sd isn't available (non-macOS).
+    """
+    try:
+        return subprocess.Popen(
+            ["dns-sd", "-R", "artifact-server", "_artifactserver._tcp", "local", str(port)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, FileNotFoundError):
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default=str(CONFIG_PATH))
@@ -1124,11 +1139,19 @@ def main():
     server = ThreadingHTTPServer((host, port), Handler)
     Handler.config = config
     server.stderr = sys.stderr
+    mdns = register_mdns(port)
     print(f"artifact-server listening on http://{host}:{port} (root: {config['artifacts_root']})")
+    if mdns is None:
+        print("  (mDNS advertisement unavailable: dns-sd not found)")
+    else:
+        print(f"  advertising as 'artifact-server' (_artifactserver._tcp) for discovery")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        if mdns is not None:
+            mdns.terminate()
 
 
 if __name__ == "__main__":

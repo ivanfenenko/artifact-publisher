@@ -111,7 +111,25 @@ For a screenshot gallery, prefer a grid inside `.page` (e.g. `display: grid; gri
 
 ## Publishing from another machine (no CLI installed)
 
-If you're not on the server machine and `publish-artifact` isn't available, push over HTTP with `curl` — the server accepts the artifact body directly. The server URL is `http://<hostname>.local:8787` (the same base the home page runs on; set `ARTIFACT_SERVER` if it differs, e.g. `http://mac-mini:8787`).
+If you're not on the server machine and `publish-artifact` isn't available, push over HTTP with `curl` — the server accepts the artifact body directly.
+
+### Finding the server address (do this first)
+
+Resolve the server base URL in this order:
+
+1. **`ARTIFACT_SERVER` env var** — if set, use it directly (e.g. `http://mac-mini:8787`). It may also come from a project config or the user.
+2. **mDNS discovery** — on macOS, browse Bonjour for the service:
+   ```
+   dns-sd -B _artifactserver._tcp local.
+   ```
+   Look for an instance named `artifact-server`; that machine is the server. Resolve it to a hostname with:
+   ```
+   dns-sd -L artifact-server _artifactserver._tcp local.
+   ```
+   The host line gives the hostname to use (`<host>.local`), then use `http://<host>.local:8787`.
+3. **Ask the user** — if discovery turns up nothing, ask the user for the server address or hostname. Do not guess a random hostname.
+
+### Publishing
 
 **Single file** — pass it as the request body, `entry` names it inside the artifact:
 ```
