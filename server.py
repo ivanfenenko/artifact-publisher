@@ -11,20 +11,29 @@ Endpoints:
   GET /<date>/<slug>/<file..>  -> static file inside an artifact
   GET /api/artifacts.json      -> machine-readable artifact list
   POST /api/artifacts/archive  -> set archived flag {"date","slug","archived"}
+  POST /api/artifacts          -> publish an artifact (raw body: tarball, zip, or file)
   GET /healthz                 -> "ok"
 """
 
 import argparse
 import base64
 import html
+import io
 import json
 import mimetypes
 import os
 import re
+import shutil
+import tarfile
+import tempfile
+import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit
+
+MAX_UPLOAD = 200 * 1024 * 1024
+TYPES = {"prototype", "plan", "site", "other"}
 
 CONFIG_PATH = Path.home() / ".artifacts" / "config.json"
 
@@ -220,6 +229,176 @@ def load_artifacts(root: Path):
                 artifacts.append(info)
     artifacts.sort(key=lambda a: a.get("created") or a["slug"], reverse=True)
     return artifacts
+
+
+def slugify(name):
+    name = re.sub(r"\s+", "-", name.strip().lower())
+    name = re.sub(r"[^a-z0-9_-]+", "", name)
+    return name or "artifact"
+
+
+def unique_slug_dir(date_dir, time_str, base):
+    for i in range(1, 1000):
+        name = f"{time_str}-{base}" if i == 1 else f"{time_str}-{i}-{base}"
+        if not (date_dir / name).exists():
+            return name
+    raise RuntimeError("could not find unique slug")
+
+
+def pick_entry(artifact_dir: Path):
+    candidates = ["index.html", "index.htm"]
+    for c in candidates:
+        if (artifact_dir / c).is_file():
+            return c
+    htmls = sorted(artifact_dir.glob("*.html"))
+    if htmls:
+        return htmls[0].name
+    mds = sorted(artifact_dir.glob("*.md"))
+    if mds:
+        return mds[0].name
+    return None
+
+
+def check_archive_member(name: str):
+    parts = Path(name).parts
+    if name.startswith("/") or ".." in parts:
+        raise ValueError(f"unsafe path in archive: {name!r}")
+
+
+def extract_upload(body: bytes, dest: Path, filename: str):
+    """Extract a raw upload into dest: tarball/zip if it is one, else a single file."""
+    dest.mkdir(parents=True, exist_ok=True)
+    lower = filename.lower()
+    if lower.endswith((".tar.gz", ".tgz")) or (body[:2] == b"\x1f\x8b"):
+        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as tf:
+            for m in tf.getmembers():
+                check_archive_member(m.name)
+            tf.extractall(dest)
+    elif lower.endswith(".zip") or body[:2] == b"PK":
+        with zipfile.ZipFile(io.BytesIO(body)) as zf:
+            for name in zf.namelist():
+                check_archive_member(name)
+            zf.extractall(dest)
+    else:
+        name = Path(filename).name or "index.html"
+        (dest / name).write_bytes(body)
+
+
+def inline_md(text):
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", r'<a href="\2">\1</a>', text)
+    return text
+
+
+def render_markdown(text):
+    text = html.escape(text)
+    lines = text.splitlines()
+    out = []
+    i = 0
+    n = len(lines)
+    in_code = False
+    code_lines = []
+    open_lists = []
+
+    def close_lists():
+        for tag, _ in reversed(open_lists):
+            out.append(f"</{tag}>")
+        open_lists.clear()
+
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+
+        if not in_code and stripped.startswith("```"):
+            in_code = True
+            code_lines = []
+            i += 1
+            continue
+        if in_code:
+            if stripped.startswith("```"):
+                in_code = False
+                out.append("<pre><code>" + "\n".join(code_lines) + "</code></pre>")
+            else:
+                code_lines.append(line)
+            i += 1
+            continue
+
+        if not stripped:
+            close_lists()
+            out.append("")
+            i += 1
+            continue
+
+        if stripped == "---":
+            close_lists()
+            out.append("<hr>")
+            i += 1
+            continue
+
+        m = re.match(r"^(#{1,6})\s+(.*)$", stripped)
+        if m:
+            close_lists()
+            level = len(m.group(1))
+            out.append(f"<h{level}>{inline_md(m.group(2))}</h{level}>")
+            i += 1
+            continue
+
+        m = re.match(r"^([>*])\s+(.*)$", stripped)
+        if m and m.group(1) == ">":
+            quote_lines = []
+            while i < n and lines[i].strip().startswith(">"):
+                quote_lines.append(inline_md(re.sub(r"^>\s?", "", lines[i].strip())))
+                i += 1
+            close_lists()
+            out.append("<blockquote>" + "<br>".join(quote_lines) + "</blockquote>")
+            continue
+
+        m = re.match(r"^([-*])\s+(.*)$", stripped)
+        if m:
+            close_lists()
+            items = [inline_md(m.group(2))]
+            i += 1
+            while i < n and re.match(r"^\s*[-*]\s+", lines[i]):
+                items.append(inline_md(re.sub(r"^\s*[-*]\s+", "", lines[i])))
+                i += 1
+            out.append("<ul>" + "".join(f"<li>{it}</li>" for it in items) + "</ul>")
+            continue
+
+        m = re.match(r"^\d+\.\s+(.*)$", stripped)
+        if m:
+            close_lists()
+            items = [inline_md(m.group(1))]
+            i += 1
+            while i < n and re.match(r"^\s*\d+\.\s+", lines[i]):
+                items.append(inline_md(re.sub(r"^\s*\d+\.\s+", "", lines[i])))
+                i += 1
+            out.append("<ol>" + "".join(f"<li>{it}</li>" for it in items) + "</ol>")
+            continue
+
+        para = [inline_md(stripped)]
+        i += 1
+        while i < n and lines[i].strip() and not re.match(r"^(#{1,6}\s|[-*>]\s|\d+\.\s|```)", lines[i].strip()):
+            para.append(inline_md(lines[i].strip()))
+            i += 1
+        out.append("<p>" + " ".join(para) + "</p>")
+
+    if in_code:
+        out.append("<pre><code>" + "\n".join(code_lines) + "</code></pre>")
+    close_lists()
+    return "\n".join(out) + "\n"
+
+
+def render_markdown_upload(artifact_dir: Path, entry: str):
+    """Render a .md entry to HTML next to it, returning the new entry name."""
+    md_path = artifact_dir / entry
+    if not md_path.is_file() or not entry.lower().endswith(".md"):
+        return entry
+    text = md_path.read_text(encoding="utf-8")
+    html_name = Path(entry).stem + ".html"
+    (artifact_dir / html_name).write_text(render_markdown(text), encoding="utf-8")
+    return html_name
 
 
 def artifact_link(a):
@@ -766,6 +945,8 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(self.path.split("?", 1)[0])
         if path.rstrip("/") == "/api/artifacts/archive":
             self.archive_artifact()
+        elif path.rstrip("/") == "/api/artifacts":
+            self.publish_artifact()
         else:
             self.send_error_page(404, "Not found")
 
@@ -806,6 +987,71 @@ class Handler(BaseHTTPRequestHandler):
             manifest.pop("archived_at", None)
         meta.write_text(json.dumps(manifest, indent=2))
         self.send_json({"ok": True, "date": date_str, "slug": slug, "archived": archived})
+
+    def publish_artifact(self):
+        """POST /api/artifacts?title=..&type=..&desc=..&entry=.. with raw body.
+
+        Body is a tar.gz/zip archive (directory) or a single file. Title/type/desc
+        come from the query string so a plain `curl --data-binary @file` works.
+        """
+        qs = parse_qs(urlsplit(self.path).query)
+        title = (qs.get("title") or [""])[0].strip() or "artifact"
+        type_ = (qs.get("type") or [""])[0].strip().lower() or "prototype"
+        if type_ not in TYPES:
+            type_ = "other"
+        desc = (qs.get("desc") or [""])[0].strip()
+        entry = (qs.get("entry") or [""])[0].strip() or "index.html"
+        no_render = "no_render" in qs
+
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0 or length > MAX_UPLOAD:
+            self.send_json({"ok": False, "error": f"body must be 1..{MAX_UPLOAD} bytes"}, 400)
+            return
+        body = self.rfile.read(length)
+
+        root = Path(self.config["artifacts_root"])
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        time_str = now.strftime("%H%M")
+        date_dir = root / date_str
+        date_dir.mkdir(parents=True, exist_ok=True)
+        base = slugify(title)
+        slug = unique_slug_dir(date_dir, time_str, base)
+
+        staging = Path(tempfile.mkdtemp(dir=str(root), prefix=".staging-"))
+        artifact_dir = staging / slug
+        try:
+            extract_upload(body, artifact_dir, entry)
+            entry = pick_entry(artifact_dir) or entry
+            if not no_render:
+                entry = render_markdown_upload(artifact_dir, entry)
+            manifest = {
+                "title": title,
+                "type": type_,
+                "description": desc,
+                "created": now.strftime("%Y-%m-%dT%H:%M:%S"),
+                "entry": entry,
+                "source": "remote",
+            }
+            (artifact_dir / "artifact.json").write_text(json.dumps(manifest, indent=2))
+            final_dir = date_dir / slug
+            os.rename(artifact_dir, final_dir)
+        except Exception as e:
+            self.send_json({"ok": False, "error": f"publish failed: {e}"}, 400)
+            return
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+
+        path = f"/{date_str}/{slug}/"
+        base_url = str(self.config.get("public_base") or "").rstrip("/")
+        resp = {"ok": True, "date": date_str, "slug": slug, "title": title,
+                "type": type_, "path": path}
+        if base_url:
+            resp["url"] = base_url + path
+        ts = self.config.get("tailscale_base")
+        if ts:
+            resp["tailscale_url"] = str(ts).rstrip("/") + path
+        self.send_json(resp)
 
     def serve_artifact(self, root, segs, embedded=False):
         date_dir, slug_dir = segs[0], segs[1]

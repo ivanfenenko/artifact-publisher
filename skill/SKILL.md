@@ -1,6 +1,6 @@
 ---
 name: publish-artifact
-description: Publish a built artifact (HTML prototype, plan doc, static site, etc.) from this machine to the artifact server so it can be opened from a browser over the local network / Tailscale. Use after building anything the user might want to view remotely.
+description: Publish a built artifact (HTML prototype, plan doc, static site, etc.) from this machine — or over HTTP from another machine on the LAN/Tailscale — to the artifact server so it can be opened from a browser. Use after building anything the user might want to view remotely.
 ---
 
 # publish-artifact
@@ -108,6 +108,29 @@ For a screenshot gallery, prefer a grid inside `.page` (e.g. `display: grid; gri
 5. The command prints a URL. Always paste it in your final message so the user can click it.
 
 **Completion check before handing over the URL:** open the shape decision again — if sketch, would this still be readable on a 1440px desktop? If not, fix and republish.
+
+## Publishing from another machine (no CLI installed)
+
+If you're not on the server machine and `publish-artifact` isn't available, push over HTTP with `curl` — the server accepts the artifact body directly. The server URL is `http://<hostname>.local:8787` (the same base the home page runs on; set `ARTIFACT_SERVER` if it differs, e.g. `http://mac-mini:8787`).
+
+**Single file** — pass it as the request body, `entry` names it inside the artifact:
+```
+curl -X POST --data-binary @plan.md \
+  "http://mac-mini:8787/api/artifacts?title=My%20Plan&type=plan&desc=...&entry=plan.md"
+```
+
+**Directory** — tar it with the folder *contents* at the archive root, then upload:
+```
+tar -czf /tmp/art.tgz -C <dir> .
+curl -X POST --data-binary @/tmp/art.tgz \
+  "http://mac-mini:8787/api/artifacts?title=My%20Site&type=site&desc=..."
+```
+
+The response is JSON: `{"ok": true, "url": "http://mac-mini:8787/2026-08-09/my-site/", ...}`. Paste the `url` value in your final message.
+
+- All the same rules apply: sketch-vs-exact-spec first, self-contained source, `.md` auto-renders unless you add `&no_render=1`.
+- If the server has Basic Auth enabled, add `-u user:pass`.
+- The same URL also works over Tailscale using the server's MagicDNS name.
 
 ## Conventions
 - If the artifact needs an obvious name and the user didn't give one, derive the title from the content (e.g. the `<title>` of an HTML file).
