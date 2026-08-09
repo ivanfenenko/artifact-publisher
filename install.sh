@@ -42,10 +42,15 @@ EOF
 fi
 mkdir -p "$HOME/artifacts"
 
-# 3. Global skill
+# 3. Global skills
 mkdir -p "$SKILL_DIR"
 cp "$PROJECT_DIR/skill/SKILL.md" "$SKILL_DIR/SKILL.md"
 echo "installed skill -> $SKILL_DIR"
+if [ -f "$PROJECT_DIR/skill/publish-prototype/SKILL.md" ]; then
+  mkdir -p "$HOME/.agents/skills/publish-prototype"
+  cp "$PROJECT_DIR/skill/publish-prototype/SKILL.md" "$HOME/.agents/skills/publish-prototype/SKILL.md"
+  echo "installed skill -> $HOME/.agents/skills/publish-prototype"
+fi
 
 # 4. LaunchAgent
 mkdir -p "$HOME/Library/LaunchAgents"
