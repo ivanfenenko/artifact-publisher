@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Artifact home — D proposals</title>
+<!-- PROTOTYPE: three proposals derived from the Workbench variant (D), each with light/dark themes.
+     Switch via ?variant=A|B|C and ?theme=light|dark, or the floating switcher below. -->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+  /* ---------- theme tokens ---------- */
+  :root, [data-theme="dark"] {
+    --bg: #0e1117; --surface: #161a22; --surface-2: #1c2130; --border: #262c3a;
+    --text: #e9edf4; --muted: #9aa3b2; --faint: #5d6675;
+    --accent: #6ea8fe; --accent-soft: rgba(110,168,254,.14);
+    --proto-bg: rgba(110,168,254,.16);  --proto-fg: #9cc4ff; --proto-bd: rgba(110,168,254,.4);
+    --plan-bg:  rgba(86,200,143,.16);  --plan-fg:  #7fd6a8; --plan-bd:  rgba(86,200,143,.4);
+    --site-bg:  rgba(177,140,255,.16); --site-fg:  #c3a6ff; --site-bd:  rgba(177,140,255,.4);
+    --other-bg: rgba(154,163,178,.14); --other-fg: #aeb6c4; --other-bd: rgba(154,163,178,.35);
+    --hover: #1b2130; --shadow: 0 10px 30px rgba(0,0,0,.4);
+    color-scheme: dark;
+  }
+  [data-theme="light"] {
+    --bg: #f4f6f9; --surface: #ffffff; --surface-2: #edf1f6; --border: #dfe4ec;
+    --text: #1b2028; --muted: #5a6370; --faint: #97a0ad;
+    --accent: #2563eb; --accent-soft: rgba(37,99,235,.08);
+    --proto-bg: #e3efff; --proto-fg: #1d5fbf; --proto-bd: #b6d2fa;
+    --plan-bg:  #e2f7ea; --plan-fg:  #1c7a41; --plan-bd:  #b6e4c8;
+    --site-bg:  #f0e9ff; --site-fg:  #6b35c0; --site-bd:  #d6c2f7;
+    --other-bg: #eceef2; --other-fg: #555d6a; --other-bd: #d7dbe2;
+    --hover: #f0f4f9; --shadow: 0 10px 30px rgba(20,30,50,.12);
+    color-scheme: light;
+  }
+
+  .type-badge {
+    font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    padding: .18rem .55rem; border-radius: 999px; white-space: nowrap; border: 1px solid transparent;
+  }
+  .type-prototype { background: var(--proto-bg); color: var(--proto-fg); border-color: var(--proto-bd); }
+  .type-plan      { background: var(--plan-bg);  color: var(--plan-fg);  border-color: var(--plan-bd); }
+  .type-site      { background: var(--site-bg);  color: var(--site-fg);  border-color: var(--site-bd); }
+  .type-other     { background: var(--other-bg); color: var(--other-fg); border-color: var(--other-bd); }
+  .type-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .type-dot.t-prototype { background: var(--proto-fg); }
+  .type-dot.t-plan      { background: var(--plan-fg); }
+  .type-dot.t-site      { background: var(--site-fg); }
+  .type-dot.t-other     { background: var(--other-fg); }
+
+  .field {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: .45rem .8rem; font-size: .87rem; outline: none;
+  }
+  .field:focus { border-color: var(--accent); }
+  .field::placeholder { color: var(--faint); }
+  .btn {
+    background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 999px; padding: .4rem .9rem; font-size: .82rem; cursor: pointer;
+  }
+  .btn:hover { color: var(--text); border-color: var(--accent); }
+  .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: var(--hover); color: var(--text); border-color: var(--border); }
+
+  /* ---------- shared layout ---------- */
+  .shell { min-height: 100vh; background: var(--bg); color: var(--text); }
+  .shell .wrap { max-width: 1080px; margin: 0 auto; padding: 1.6rem 1.4rem 6rem; }
+
+  /* ============ Proposal A: refined workbench ============ */
+  .pa .topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.3rem; }
+  .pa .topbar h1 { margin: 0; font-size: 1.15rem; font-weight: 650; display: flex; align-items: center; gap: .55rem; }
+  .pa .topbar h1 .mark { color: var(--accent); }
+  .pa .stats { display: flex; gap: .45rem; flex-wrap: wrap; }
+  .pa .stat {
+    font-size: .78rem; color: var(--muted); background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: .34rem .7rem; white-space: nowrap;
+  }
+  .pa .stat b { color: var(--text); }
+  .pa .controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+  .pa .controls .spacer { flex: 1; }
+  .pa .table { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .pa .thead, .pa .trow { display: grid; grid-template-columns: 110px 1fr 150px 80px; gap: .8rem; padding: .7rem 1.05rem; align-items: center; }
+  .pa .thead {
+    background: var(--surface-2); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--faint);
+  }
+  .pa .trow { border-top: 1px solid var(--border); font-size: .87rem; text-decoration: none; color: inherit; }
+  .pa .trow:hover { background: var(--hover); }
+  .pa .trow .ttl { font-weight: 550; }
+  .pa .trow .ttl:hover { color: var(--accent); }
+  .pa .trow .dsc { color: var(--muted); font-size: .79rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pa .trow .when { color: var(--muted); font-size: .78rem; }
+
+  /* ============ Proposal B: sidebar workbench ============ */
+  .pb { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .pb aside {
+    border-right: 1px solid var(--border); background: var(--surface); padding: 1.4rem 1rem;
+    display: flex; flex-direction: column; gap: .4rem;
+  }
+  .pb aside .brand { font-size: 1.05rem; font-weight: 700; margin: 0 0 .4rem .4rem; display: flex; align-items: center; gap: .5rem; }
+  .pb aside .brand .mark { color: var(--accent); }
+  .pb aside .search { margin: .6rem .4rem 1rem; }
+  .pb aside .search input { width: 100%; }
+  .pb aside .navlabel {
+    font-size: .66rem; text-transform: uppercase; letter-spacing: .1em; color: var(--faint);
+    margin: 1rem .4rem .4rem;
+  }
+  .pb aside .navitem {
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+    padding: .48rem .6rem; border-radius: 8px; font-size: .88rem; color: var(--muted);
+    text-decoration: none; cursor: pointer; border: 1px solid transparent;
+  }
+  .pb aside .navitem:hover { background: var(--hover); color: var(--text); }
+  .pb aside .navitem.on { background: var(--accent-soft); color: var(--accent); border-color: var(--proto-bd); font-weight: 550; }
+  .pb aside .navitem .cnt { font-size: .74rem; color: var(--faint); }
+  .pb main { padding: 1.6rem 1.6rem 6rem; min-width: 0; }
+  .pb main .crumb { font-size: .74rem; color: var(--faint); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .4rem; }
+  .pb main h1 { margin: 0 0 1.4rem; font-size: 1.35rem; font-weight: 650; }
+  .pb .list { display: flex; flex-direction: column; }
+  .pb .dayhead {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; color: var(--faint);
+    margin: 1.2rem 0 .4rem; display: flex; align-items: center; gap: .8rem;
+  }
+  .pb .dayhead .rule { flex: 1; height: 1px; background: var(--border); }
+  .pb .entry {
+    display: flex; align-items: center; gap: .9rem; padding: .65rem .6rem; border-radius: 10px;
+    text-decoration: none; color: inherit;
+  }
+  .pb .entry:hover { background: var(--hover); }
+  .pb .entry .main { flex: 1; min-width: 0; }
+  .pb .entry .ttl { font-weight: 550; font-size: .92rem; }
+  .pb .entry .dsc { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pb .entry .time { color: var(--faint); font-size: .76rem; font-variant-numeric: tabular-nums; }
+
+  /* ============ Proposal C: master-detail ============ */
+  .pc .wrap { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 1.2rem; align-items: start; }
+  .pc .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+  .pc .listpane { padding: 1rem; }
+  .pc .listpane .hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: .8rem; padding: 0 .2rem; }
+  .pc .listpane .hd h1 { margin: 0; font-size: 1.05rem; font-weight: 650; }
+  .pc .listpane .hd .count { font-size: .78rem; color: var(--muted); }
+  .pc .listpane .search input { width: 100%; margin-bottom: .8rem; }
+  .pc .listrow {
+    display: flex; align-items: center; gap: .7rem; padding: .55rem .6rem; border-radius: 9px;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .pc .listrow:hover { background: var(--hover); }
+  .pc .listrow.sel { background: var(--accent-soft); border-color: var(--proto-bd); }
+  .pc .listrow .body { flex: 1; min-width: 0; }
+  .pc .listrow .ttl { font-weight: 550; font-size: .88rem; }
+  .pc .listrow .meta { font-size: .74rem; color: var(--faint); margin-top: .1rem; }
+  .pc .detail { position: sticky; top: 1.4rem; padding: 1.5rem; }
+  .pc .detail .d-badge { margin-bottom: .9rem; }
+  .pc .detail h2 { margin: 0 0 .5rem; font-size: 1.5rem; line-height: 1.25; }
+  .pc .detail .d-desc { color: var(--muted); font-size: .95rem; margin: 0 0 1.4rem; line-height: 1.55; }
+  .pc .detail .d-meta { display: grid; gap: .5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+  .pc .detail .d-meta .row { display: flex; justify-content: space-between; font-size: .82rem; }
+  .pc .detail .d-meta .k { color: var(--faint); }
+  .pc .detail .d-meta .v { color: var(--muted); }
+  .pc .detail .open {
+    display: inline-flex; align-items: center; gap: .45rem; margin-top: 1.2rem;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: .9rem;
+    padding: .6rem 1.1rem; border-radius: 10px; text-decoration: none;
+  }
+  .pc .detail .open:hover { filter: brightness(1.08); }
+  .pc .detail .preview {
+    margin-top: 1.3rem; border: 1px dashed var(--border); border-radius: 10px; height: 190px;
+    display: grid; place-items: center; color: var(--faint); font-size: .8rem; background: var(--bg);
+  }
+
+  /* ---------- floating switcher ---------- */
+  #switcher {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: .7rem; z-index: 50;
+    background: #13161d; color: #eef1f6; border: 1px solid #333a46;
+    border-radius: 999px; padding: .4rem .6rem; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    box-shadow: 0 8px 28px rgba(0,0,0,.5); font-size: .82rem;
+  }
+  #switcher .btn {
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid #3a4150; background: #1b202a;
+    color: #c9d0dc; font-size: 1rem; line-height: 1; cursor: pointer; display: grid; place-items: center;
+  }
+  #switcher .btn:hover { background: #2a313e; color: #fff; }
+  #switcher .label { font-weight: 600; letter-spacing: .02em; min-width: 168px; text-align: center; }
+  #switcher .label small { color: #8b93a1; font-weight: 400; }
+  #switcher .theme {
+    border-radius: 999px; border: 1px solid #3a4150; background: #1b202a; color: #c9d0dc;
+    cursor: pointer; font-size: .9rem; width: 30px; height: 30px; display: grid; place-items: center; padding: 0;
+  }
+  #switcher .theme:hover { background: #2a313e; color: #fff; }
+  #switcher .proto-note {
+    position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+    background: #13161d; border: 1px solid #333a46; color: #ffb4b0; font-size: .68rem;
+    letter-spacing: .08em; text-transform: uppercase; padding: .15rem .6rem; border-radius: 6px; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="switcher" role="group" aria-label="Prototype variant switcher">
+  <span class="proto-note">UI prototype — not the real home page</span>
+  <button class="btn" id="prev" aria-label="Previous variant">&#8249;</button>
+  <span class="label" id="label"></span>
+  <button class="btn" id="next" aria-label="Next variant">&#8250;</button>
+  <button class="theme" id="themeBtn" aria-label="Toggle light / dark">&#9789;</button>
+</div>
+<script>
+const ARTIFACTS = [
+  { d:"Today",     date:"Aug 5", time:"14:22", type:"prototype", title:"Artifact Home — D Proposals", desc:"Three workbench-style home pages, each with light and dark themes" },
+  { d:"Today",     date:"Aug 5", time:"11:40", type:"prototype", title:"Smoke Test", desc:"Verify the publish pipeline end to end" },
+  { d:"Today",     date:"Aug 5", time:"09:15", type:"plan",      title:"Grant Proposal Draft", desc:"Sponsorship ask for the summer research sprint" },
+  { d:"Yesterday", date:"Aug 4", time:"18:30", type:"site",      title:"Landing Page Refresh", desc:"New hero, pricing section, and a compressed footer" },
+  { d:"Yesterday", date:"Aug 4", time:"15:10", type:"plan",      title:"Triage Workflow Notes", desc:"State machine for triage roles, captured from last week" },
+  { d:"Yesterday", date:"Aug 4", time:"12:00", type:"prototype", title:"Order State Simulator", desc:"Terminal app pushing the state model through edge cases" },
+  { d:"Tuesday",   date:"Aug 3", time:"20:45", type:"site",      title:"Portfolio v2", desc:"Full static rebuild with 11ty, now with a dark mode" },
+  { d:"Tuesday",   date:"Aug 3", time:"16:20", type:"plan",      title:"Architecture Overview", desc:"Two-piece design: always-on server plus a global publish skill" },
+  { d:"Tuesday",   date:"Aug 3", time:"10:05", type:"prototype", title:"Color System Experiment", desc:"Picking accent palettes for the new dashboard" },
+  { d:"Monday",    date:"Aug 2", time:"22:10", type:"other",     title:"Weekend Reading List", desc:"Curated links on distributed systems" },
+];
+const DAYDATE = { "Today":"2026-08-05", "Yesterday":"2026-08-04", "Tuesday":"2026-08-03", "Monday":"2026-08-02" };
+
+const VARIANTS = [
+  { key:"A", name:"Refined table",    render: renderA },
+  { key:"B", name:"Sidebar workbench", render: renderB },
+  { key:"C", name:"Master-detail",    render: renderC },
+];
+
+let selectedSlug = null;
+
+function esc(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function href(a){ const slug = a.title.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); return "/" + (DAYDATE[a.d]||"2026-08-05") + "/" + slug + "/"; }
+function groupByDay(list){ const m = new Map(); for (const a of list){ if(!m.has(a.d)) m.set(a.d, []); m.get(a.d).push(a); } return [...m.values()]; }
+
+/* ---------- Proposal A: refined workbench ---------- */
+function renderA(list){
+  const counts = { prototype:0, plan:0, site:0, other:0 };
+  list.forEach(a => counts[a.type]++);
+  const rows = list.map(a => `
+    <a class="trow" href="${href(a)}">
+      <span class="type-badge type-${esc(a.type)}">${esc(a.type)}</span>
+      <div><div class="ttl">${esc(a.title)}</div><div class="dsc">${esc(a.desc)}</div></div>
+      <div class="when">${esc(a.d)} &middot; ${esc(a.date)}</div>
+      <div class="when">${esc(a.time)}</div>
+    </a>`).join("");
+  return `
+  <div class="shell pa"><div class="wrap">
+    <div class="topbar">
+      <h1><span class="mark">&#9670;</span> Artifacts</h1>
+      <div class="stats">
+        <span class="stat"><b>${list.length}</b> total</span>
+        <span class="stat"><b>${counts.prototype}</b> prototype</span>
+        <span class="stat"><b>${counts.plan}</b> plan</span>
+        <span class="stat"><b>${counts.site}</b> site</span>
+        <span class="stat"><b>${counts.other}</b> other</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn on" data-f="all">All</button>
+      <button class="btn" data-f="prototype">Prototype</button>
+      <button class="btn" data-f="plan">Plan</button>
+      <button class="btn" data-f="site">Site</button>
+      <button class="btn" data-f="other">Other</button>
+      <span class="spacer"></span>
+      <input class="field" type="search" placeholder="Search artifacts…" style="width:230px">
+    </div>
+    <div class="table">
+      <div class="thead"><span>Type</span><span>Artifact</span><span>Day</span><span>Time</span></div>
+      ${rows}
+    </div>
+  </div></div>`;
+}
+
+/* ---------- Proposal B: sidebar workbench ---------- */
+function renderB(list){
+  const counts = { prototype:0, plan:0, site:0, other:0 };
+  list.forEach(a => counts[a.type]++);
+  const nav = [
+    { f:"all", label:"All artifacts", cnt:list.length },
+    { f:"prototype", label:"Prototypes", cnt:counts.prototype },
+    { f:"plan", label:"Plans", cnt:counts.plan },
+    { f:"site", label:"Sites", cnt:counts.site },
+    { f:"other", label:"Other", cnt:counts.other },
+  ].map(n => `<a class="navitem ${n.f==="all"?"on":""}" data-f="${n.f}" href="#">${n.label}<span class="cnt">${n.cnt}</span></a>`).join("");
+  const body = groupByDay(list).map(days_ => `
+    <div class="dayhead">${esc(days_[0].d)} &middot; ${esc(days_[0].date)}<span class="rule"></span></div>
+    ${days_.map(a => `
+    <a class="entry" href="${href(a)}">
+      <span class="type-dot t-${esc(a.type)}"></span>
+      <span class="main"><span class="ttl">${esc(a.title)}</span><span class="dsc">${esc(a.desc)}</span></span>
+      <span class="time">${esc(a.time)}</span>
+    </a>`).join("")}
+  `).join("");
+  return `
+  <div class="shell pb">
+    <aside>
+      <div class="brand"><span class="mark">&#9670;</span> Artifacts</div>
+      <div class="search"><input class="field" type="search" placeholder="Search…"></div>
+      <div class="navlabel">Filter</div>
+      <div class="nav">${nav}</div>
+    </aside>
+    <main>
+      <div class="crumb">Latest activity</div>
+      <h1>Artifact feed</h1>
+      <div class="list">${body}</div>
+    </main>
+  </div>`;
+}
+
+/* ---------- Proposal C: master-detail ---------- */
+function renderC(list){
+  const sel = list.find(a => a.title === selectedSlug) || list[0];
+  selectedSlug = sel.title;
+  const rows = list.map(a => `
+    <div class="listrow ${a.title===sel.title?"sel":""}" data-slug="${esc(a.title)}">
+      <span class="type-dot t-${esc(a.type)}"></span>
+      <span class="body">
+        <span class="ttl">${esc(a.title)}</span>
+        <div class="meta">${esc(a.d)} &middot; ${esc(a.date)} &middot; ${esc(a.time)}</div>
+      </span>
+    </div>`).join("");
+  return `
+  <div class="shell pc"><div class="wrap">
+    <div class="panel listpane">
+      <div class="hd"><h1>Artifacts</h1><span class="count">${list.length}</span></div>
+      <div class="search"><input class="field" type="search" placeholder="Search…"></div>
+      <div id="pc-list">${rows}</div>
+    </div>
+    <div class="panel detail">
+      <span class="type-badge type-${esc(sel.type)} d-badge">${esc(sel.type)}</span>
+      <h2>${esc(sel.title)}</h2>
+      <p class="d-desc">${esc(sel.desc)}</p>
+      <div class="d-meta">
+        <div class="row"><span class="k">Published</span><span class="v">${esc(sel.date)} ${esc(sel.time)}</span></div>
+        <div class="row"><span class="k">Type</span><span class="v">${esc(sel.type)}</span></div>
+        <div class="row"><span class="k">URL</span><span class="v">${href(sel)}</span></div>
+      </div>
+      <a class="open" href="${href(sel)}">Open artifact &rarr;</a>
+      <div class="preview">preview placeholder</div>
+    </div>
+  </div></div>`;
+}
+
+/* ---------- theme + switcher logic ---------- */
+const app = document.getElementById("app");
+const labelEl = document.getElementById("label");
+const themeBtn = document.getElementById("themeBtn");
+let idx = 0;
+
+function currentVariant(){
+  const v = new URLSearchParams(location.search).get("variant");
+  const i = VARIANTS.findIndex(x => x.key === (v||"").toUpperCase());
+  return i >= 0 ? i : 0;
+}
+function currentTheme(){
+  const t = new URLSearchParams(location.search).get("theme");
+  return t === "light" ? "light" : "dark";
+}
+function applyTheme(){
+  const t = currentTheme();
+  document.documentElement.dataset.theme = t;
+  themeBtn.innerHTML = t === "dark" ? "&#9788;" : "&#9789;";
+  themeBtn.title = t === "dark" ? "Switch to light" : "Switch to dark";
+}
+function setTheme(t){
+  const url = new URL(location.href);
+  url.searchParams.set("theme", t);
+  history.replaceState({}, "", url);
+  applyTheme();
+}
+function apply(){
+  idx = currentVariant();
+  const v = VARIANTS[idx];
+  app.innerHTML = v.render(ARTIFACTS);
+  labelEl.innerHTML = `<b>${v.key}</b> &mdash; ${v.name} <small>&middot; ${currentTheme() === "dark" ? "dark" : "light"} mode</small>`;
+  wireVariantHooks();
+}
+function setVariant(i){
+  idx = (i + VARIANTS.length) % VARIANTS.length;
+  const url = new URL(location.href);
+  url.searchParams.set("variant", VARIANTS[idx].key);
+  history.replaceState({}, "", url);
+  apply();
+}
+
+function wireVariantHooks(){
+  const qf = (el, all=false) => all ? el.querySelectorAll("[data-f]") : el.querySelector("[data-f]");
+  document.querySelectorAll("[data-f]").forEach(b => b.addEventListener("click", e => {
+    e.preventDefault();
+    const scope = b.closest(".pa") || b.closest(".pb");
+    if (!scope) return;
+    scope.querySelectorAll("[data-f]").forEach(x => x.classList.toggle("on", x === b));
+    const f = b.dataset.f;
+    const rows = scope.querySelectorAll(".trow, .entry");
+    rows.forEach(r => {
+      const badge = r.querySelector(".type-badge, .type-dot");
+      const isType = badge && badge.className.includes("type-" + f);
+      r.style.display = (f === "all" || isType) ? "" : "none";
+    });
+    const days = scope.querySelectorAll(".dayhead");
+    days.forEach(d => {
+      const entries = [...d.parentElement.children].filter(n => n.classList.contains("entry"));
+      d.style.display = entries.some(n => n.style.display !== "none") ? "" : "none";
+    });
+  }));
+
+  const input = document.querySelector(".pa .controls input, .pb aside input, .pc .search input");
+  if (input) input.addEventListener("input", () => {
+    const q = input.value.toLowerCase();
+    const scope = input.closest(".pa") || input.closest(".pb") || input.closest(".pc");
+    const rows = scope.querySelectorAll(".trow, .entry, .listrow");
+    rows.forEach(r => {
+      const txt = r.textContent.toLowerCase();
+      if (r.classList.contains("listrow")) r.style.display = txt.includes(q) ? "" : "none";
+      else r.style.display = txt.includes(q) ? "" : "none";
+    });
+    const days = scope.querySelectorAll(".dayhead");
+    days.forEach(d => {
+      const siblings = [...d.parentElement.children].filter(n => n.classList.contains("entry"));
+      d.style.display = siblings.some(n => n.style.display !== "none") ? "" : "none";
+    });
+  });
+
+  const listrows = document.querySelectorAll(".pc .listrow");
+  listrows.forEach(r => r.addEventListener("click", () => {
+    selectedSlug = r.dataset.slug;
+    apply();
+  }));
+}
+
+document.getElementById("prev").addEventListener("click", () => setVariant(idx - 1));
+document.getElementById("next").addEventListener("click", () => setVariant(idx + 1));
+themeBtn.addEventListener("click", () => setTheme(currentTheme() === "dark" ? "light" : "dark"));
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") setVariant(idx - 1);
+  if (e.key === "ArrowRight") setVariant(idx + 1);
+  if (e.key === "t" || e.key === "T") setTheme(currentTheme() === "dark" ? "light" : "dark");
+});
+applyTheme();
+apply();
+</script>
+</body>
+</html>
