@@ -44,7 +44,7 @@ mkdir -p "$HOME/artifacts"
 
 # 3. Global skills
 mkdir -p "$SKILL_DIR"
-cp "$PROJECT_DIR/skill/SKILL.md" "$SKILL_DIR/SKILL.md"
+cp "$PROJECT_DIR/skill/publish-artifact/SKILL.md" "$SKILL_DIR/SKILL.md"
 echo "installed skill -> $SKILL_DIR"
 if [ -f "$PROJECT_DIR/skill/publish-prototype/SKILL.md" ]; then
   mkdir -p "$HOME/.agents/skills/publish-prototype"

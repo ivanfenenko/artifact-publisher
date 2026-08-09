@@ -56,7 +56,7 @@ Two pieces: a tiny always-on server on the Mac mini, and a global opencode skill
 5. **Home page** — mobile-first day feed: day headers with counts, type filter pills, search, big touch targets. Neutrals use opencode's OC-2 theme palette. Light/dark toggle persisted in localStorage, defaults to system preference.
 6. **Archive** — each row has a ghost `⋮` button (no outline) opening a compact context menu with a single action: Archive (active rows) / Restore (archived rows). Archived rows leave the default feed and appear only under the "Archived" pill; active all/type counts exclude them. Actions POST to `/api/artifacts/archive` (sets `archived`/`archived_at` in `artifact.json`, same optional Basic Auth) and pop a bottom snackbar with a Revert button that undoes the last action.
 7. **Artifact chrome bar** — HTML artifact routes are served in a lightweight outer shell with the chrome bar outside an iframe; the original artifact HTML is loaded unchanged via an internal `__ap_embed=1` route. The shell provides a back link to `/`, type badge, title, created date/time + entry, and an Archive/Restore button that POSTs to the same `/api/artifacts/archive` endpoint. This keeps arbitrary artifact CSS and layout behavior isolated; the home page is unaffected.
-8. **Sketch vs exact-spec pages** — the publish skill forces a shape choice before publish. *Exact-spec* (faithful UI / interactive prototype) ships as-is. *Sketch* (screenshot galleries, annotated flows, plan HTML) must use a centered readable column / gallery grid so content isn’t a left strip on wide desktops. Guidelines live in `skill/SKILL.md`.
+8. **Sketch vs exact-spec pages** — the publish skill forces a shape choice before publish. *Exact-spec* (faithful UI / interactive prototype) ships as-is. *Sketch* (screenshot galleries, annotated flows, plan HTML) must use a centered readable column / gallery grid so content isn’t a left strip on wide desktops. Guidelines live in `skill/publish-artifact/SKILL.md`.
 9. **Live home feed** — the home page polls `GET /api/artifacts.json` every 4s (and on tab focus) and rebuilds the feed when the list changes, preserving filter/search. No websockets; stdlib-only.
 10. **Remote publish** — `POST /api/artifacts` accepts a raw body (tar.gz/zip archive or single file) with `title`/`type`/`desc`/`entry` in the query string; stages it, writes `artifact.json`, and atomic-renames into place (same flow as the CLI, `source: "remote"`). Same optional Basic Auth. The skill instructs agents on other machines to publish via `curl --data-binary`, so a networked agent with only the skill and curl can publish — no CLI install required.
 
@@ -64,7 +64,8 @@ Two pieces: a tiny always-on server on the Mac mini, and a global opencode skill
 - `server.py` — the server (stdlib only)
 - `publish.py` — the CLI (symlinked to `publish-artifact` on PATH)
 - `install.sh` — idempotent installer (CLI, config, skill, LaunchAgent)
-- `skill/SKILL.md` — global skill, installed to `~/.agents/skills/publish-artifact/SKILL.md`
+- `skill/publish-artifact/SKILL.md` — global publish skill, installed to `~/.agents/skills/publish-artifact/SKILL.md`
+- `skill/publish-prototype/SKILL.md` — global publish-prototype skill, installed to `~/.agents/skills/publish-prototype/SKILL.md`
 - Service: `com.<user>.artifact-server` under launchd, logs to `~/Library/Logs/artifact-server.log`
 - Config: `~/.artifacts/config.json`; artifacts in `~/artifacts/<date>/<slug>/`
 - URL: `http://<hostname>.local:8787/` (home), `publish-artifact` prints per-artifact URLs
